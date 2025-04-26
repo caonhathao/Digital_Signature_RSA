@@ -1,0 +1,263 @@
+Trong file App.jsx:
+import React, { useState } from 'react';
+import './App.css';
+import { useFormik } from 'formik';
+import axios from 'axios';
+import Receiver from './Receiver.jsx';
+import { toast, ToastContainer } from 'react-toastify';
+import generateKeyPair from "./GenerateKeyPair.jsx";
+import forge from 'node-forge'
+
+function App() {
+    const formData = useFormik({
+        initialValues: {
+            ip: '',
+            file: null,
+            publicKeyPem:null,
+            signature: '',
+        },
+        onSubmit: async (values, { setSubmitting }) => {
+            try {
+                // ✅ Tạo keypair RSA bằng forge
+                const keypair = await generateKeyPair();
+                console.log('keyPair:', keypair); // 👈 thêm dòng này để kiểm tra
+
+                // ✅ Xuất public key sang PEM
+                const publicKeyPem = forge.pki.publicKeyToPem(keypair.publicKey);
+
+                // ✅ Đọc nội dung file
+                const fileBuffer = await values.file.arrayBuffer();
+                const binaryStr = String.fromCharCode(...new Uint8Array(fileBuffer));
+
+                // ✅ Tạo hash SHA-256 và ký
+                const md = forge.md.sha256.create();
+                md.update(binaryStr, 'binary');
+                const signatureBytes = keypair.privateKey.sign(md);
+                const signatureBase64 = forge.util.encode64(signatureBytes);
+
+                // ✅ Tạo form data để upload
+                const form = new FormData();
+                form.append('ip', values.ip);
+                form.append('file', values.file);
+                form.append('publicKeyPem', publicKeyPem);
+                form.append('signature', signatureBase64);
+
+                const response = await axios.post('http://192.168.1.23:3000/upload', form, {
+                    headers: {
+                        'Content-Type': 'multipart/form-data'
+                    }
+                });
+
+                toast.success(response.data.message || '✅ Upload thành công');
+            } catch (err) {
+                console.error('Upload error:', err.message);
+                toast.error('❌ Lỗi upload');
+            } finally {
+                setSubmitting(false);
+            }
+        }
+    });
+
+    return (
+        <div className={'h-screen w-screen'}>
+            <Receiver />
+            <div className={'h-full w-full flex flex-row justify-center items-center'}>
+                <form onSubmit={formData.handleSubmit} className={'shadow-md shadow-gray-500 rounded-md'}>
+                    <div className={'bg-emerald-600 p-2 flex flex-row justify-center items-center'}>Form gửi file</div>
+                    <div className={'p-2'}>
+                        <fieldset className={'border-2 border-gray-500'}>
+                            <legend>Nhập địa chỉ IP người gửi:</legend>
+                            <input type='text' name={'ip'} placeholder={`IP address... `} value={formData.values.ip}
+                                   onChange={formData.handleChange} className={'w-full p-1 outline-emerald-600'} />
+                        </fieldset>
+                        <fieldset className={'border-2 border-gray-500'}>
+                            <legend>File media muốn gửi đi:</legend>
+                            <input type='file' name={'file'} placeholder={`File upload... `}
+                                   onChange={(event) => {
+                                       formData.setFieldValue('file', event.currentTarget.files[0]);
+                                   }} className={'w-full p-1 outline-emerald-600'} />
+                        </fieldset>
+                        <div className={'w-full h-full mt-2 flex flex-row justify-around items-center'}>
+                            <button type='submit' className={'border-1 border-emerald-600 rounded-full px-2 py-1'}>
+                                Gửi
+                            </button>
+                            <button type='button' className={'border-1 border-emerald-600 rounded-full px-2 py-1'}>
+                                Hủy
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <ToastContainer />
+        </div>
+    );
+}
+
+export default App;
+
+
+Trong file GenerateKeyPair.jsx:
+import forge from 'node-forge';
+
+// Hàm tạo cặp khóa RSA sử dụng Web Worker
+const GenerateKeyPair = async () => {
+    return new Promise((resolve, reject) => {
+        // Gửi yêu cầu đến worker
+        forge.prime.worker.postMessage({ type: 'generateKeyPair' });
+
+        // Xử lý kết quả trả về từ worker
+        forge.prime.worker.onmessage = function(event) {
+            const data = event.data;
+            if (data.error) {
+                reject(data.error);
+            } else {
+                resolve(data); // trả về keypair
+            }
+        };
+
+        // Nếu có lỗi trong việc gửi thông điệp đến worker
+        forge.prime.worker.onerror = function(error) {
+            reject(error.message);
+        };
+    });
+};
+
+export default GenerateKeyPair;
+
+Trong file Receiver.jsx:
+import React, { useEffect, useRef, useState } from 'react';
+import { ToastContainer } from "react-toastify";
+import forge from 'node-forge';
+
+export default function Receiver() {
+    const [message, setMessage] = useState('🟢 Đang chờ file...');
+    const ws = useRef(null);
+
+    const verifySignature = async (fileContentBase64, signatureBase64, publicKeyPem) => {
+        try {
+            const fileBytes = forge.util.decode64(fileContentBase64);
+            const signatureBytes = forge.util.decode64(signatureBase64);
+            const publicKey = forge.pki.publicKeyFromPem(publicKeyPem);
+
+            const md = forge.md.sha256.create();
+            md.update(fileBytes, 'raw');
+
+            const isValid = publicKey.verify(md.digest().bytes(), signatureBytes);
+            return isValid;
+        } catch (err) {
+            console.error("❌ Lỗi khi xác minh chữ ký:", err);
+            return false;
+        }
+    };
+
+    useEffect(() => {
+        let socket;
+
+        const connectWebSocket = async () => {
+            try {
+                socket = new WebSocket('ws://192.168.1.23:3000'); // đổi sang ws:// nếu chạy bằng HTTP
+                ws.current = socket;
+
+                socket.onerror = (e) => {
+                    console.error('WebSocket error:', e);
+                };
+
+                socket.onopen = () => {
+                    console.log("🔌 Kết nối WebSocket mở");
+                    socket.send(JSON.stringify({
+                        type: 'register',
+                    }));
+                };
+
+                socket.onmessage = async (event) => {
+                    const data = JSON.parse(event.data);
+                    if (data.type === 'file') {
+                        setMessage(`📦 Đang xác minh file: ${data.filename}...`);
+
+                        const isValid = await verifySignature(data.fileContent, data.signature, data.publicKey);
+
+                        if (isValid) {
+                            setMessage(`✅ Đã xác minh thành công file: ${data.filename}`);
+
+                            // 🧠 Giải mã base64 thành blob
+                            const byteCharacters = atob(data.fileContent);
+                            const byteNumbers = Array.from(byteCharacters).map(char => char.charCodeAt(0));
+                            const byteArray = new Uint8Array(byteNumbers);
+                            const blob = new Blob([byteArray]);
+
+                            // 💾 Tạo đường dẫn tải xuống
+                            const downloadUrl = URL.createObjectURL(blob);
+                            const a = document.createElement('a');
+                            a.href = downloadUrl;
+                            a.download = data.filename;
+                            document.body.appendChild(a);
+                            a.click();
+                            document.body.removeChild(a);
+                            URL.revokeObjectURL(downloadUrl);
+                        } else {
+                            setMessage(`❌ Chữ ký không hợp lệ cho file: ${data.filename}`);
+                        }
+                    }
+                };
+
+                socket.onclose = () => {
+                    console.log("🔌 WebSocket ngắt kết nối");
+                    setMessage('🔴 Mất kết nối với server');
+                };
+            } catch (e) {
+                console.error('Failed to create WebSocket:', e.message);
+            }
+        };
+
+        connectWebSocket();
+
+        return () => {
+            if (ws.current) {
+                ws.current.close();
+            }
+        };
+    }, []);
+
+    return (
+        <div className="p-4">
+            <h1 className="text-xl font-bold">🎧 Trình nhận file qua WebSocket</h1>
+            <p className="mt-2">{message}</p>
+            <ToastContainer />
+        </div>
+    );
+}
+
+
+Trong file vite.config.js:
+import {defineConfig} from 'vite';
+import tailwindcss from '@tailwindcss/vite';
+import react from '@vitejs/plugin-react';
+import inject from '@rollup/plugin-inject';
+import * as fs from "node:fs";
+import * as path from "node:path";
+
+export default defineConfig({
+    server: {
+        host: '0.0.0.0',
+        port: 5173,
+    },
+    plugins: [
+        tailwindcss(),
+        react(),
+        inject({
+            Buffer: ['buffer', 'Buffer'],
+            process: 'process',
+        }),
+    ],
+    resolve: {
+        alias: {
+            stream: 'stream-browserify',
+            buffer: 'buffer/',
+            process: 'process/browser',
+        },
+    },
+    worker: {
+        format: 'es'
+    }
+});
+
