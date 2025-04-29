@@ -25,7 +25,7 @@ export default function Receiver() {
 
         const connectWebSocket = () => {
             try {
-                socket = new WebSocket('ws://192.168.1.23:3000');
+                socket = new WebSocket(import.meta.env.VITE_SERVER_SOCKET);
                 ws.current = socket;
 
                 socket.onerror = (e) => {
@@ -39,6 +39,7 @@ export default function Receiver() {
 
                 socket.onmessage = async (event) => {
                     const data = JSON.parse(event.data);
+                    console.log('response: ',data);
                     if (data.type === 'file') {
                         setMessage(`📦 Đang xác minh file: ${data.filename}...`);
 
