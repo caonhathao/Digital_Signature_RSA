@@ -1,0 +1,24 @@
+{
+  "development": {
+    "username": "postgres",
+    "password": "123456",
+    "database": "store_key",
+    "schema": "store",
+    "host": "localhost",
+    "dialect": "postgres"
+  },
+  "test": {
+    "username": "postgres",
+    "password": "123456",
+    "database": "story_key",
+    "host": "localhost",
+    "dialect": "postgres"
+  },
+  "production": {
+    "username": "postgres",
+    "password": "123456",
+    "database": "store_key",
+    "host": "localhost",
+    "dialect": "postgres"
+  }
+}

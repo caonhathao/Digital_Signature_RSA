@@ -10,33 +10,43 @@ import Base64Encode from "./Base64Encode.jsx";
 
 function App() {
     const [keyPair, setKeyPair] = useState(null); // State để lưu trữ keypair
+    const [prvKey, setPrvKey] = useState(null);
 
     const formData = useFormik({
         initialValues: {
             ip: '',
             file: null,
             publicKeyPem: '',
-            signature: '',            fileContentBase64: '' // Thêm trường này
+            signature: '', fileContentBase64: '' // Thêm trường này
 
         },
-        onSubmit: async (values, { setSubmitting }) => {
+        onSubmit: async (values, {setSubmitting}) => {
             try {
-                // 1. Generate keypair
-                const keyPair = await GenerateKeyPair();
-                const privateKey = KEYUTIL.getKey(KEYUTIL.getPEM(keyPair.privateKey, "PKCS1PRV"));
-                const publicKeyPem = KEYUTIL.getPEM(keyPair.publicKey);
+                let privateKey = '';
+                let publicKeyPem = '';
+                if (prvKey === null || prvKey === '') {
+                    // 1. Generate keypair
+                    const keyPair = await GenerateKeyPair();
+                    const prvKeyPem = KEYUTIL.getPEM(keyPair.privateKey, "PKCS1PRV");
+                    privateKey = KEYUTIL.getKey(prvKeyPem);
+                    console.log(keyPair.privateKey);
+                    localStorage.setItem('prv', prvKeyPem);
+                    publicKeyPem = KEYUTIL.getPEM(keyPair.publicKey);
+                }
 
-                // 2. Đọc file và encode thành base64
+                // 2. Reading file and encode thành base64
                 const fileBuffer = await values.file.arrayBuffer();
-                const binaryStr = Base64Encode(fileBuffer); // Đây là string base64 dùng làm input ký và verify
+                const binaryStr = Base64Encode(fileBuffer);
 
-                // 3. Ký nội dung base64 bằng private key
-                const sig = new KJUR.crypto.Signature({ alg: "SHA256withRSA", prov: "cryptojs/jsrsa" });
-                sig.init(privateKey);
-                sig.updateString(binaryStr); // Ký string base64
-                const signature = sig.sign(); // Trả về signature dạng base64
+                // 3. Signing base64's content by private key
+                const sig = new KJUR.crypto.Signature({alg: "SHA256withRSA", prov: "cryptojs/jsrsa"});
+                if (prvKey !== null) {
+                    sig.init(prvKey);
+                } else sig.init(privateKey);
+                sig.updateString(binaryStr);
+                const signature = sig.sign();
 
-                // 4. Gửi dữ liệu lên backend
+                // 4. Post all to backend
                 const form = new FormData();
                 form.append('ip', values.ip);
                 form.append('file', values.file);
@@ -44,13 +54,13 @@ function App() {
                 form.append('signature', signature);
                 form.append('fileContentBase64', binaryStr);
 
-                const response = await axios.post('http://192.168.1.23:3000/upload', form, {
-                    headers: { 'Content-Type': 'multipart/form-data' }
+                const response = await axios.post(import.meta.env.VITE_SERVER_URL + import.meta.env.VITE_UPLOAD_API, form, {
+                    headers: {'Content-Type': 'multipart/form-data'}
                 });
 
                 toast.success(response.data.message || '✅ Upload thành công');
             } catch (e) {
-                console.error('❌ Lỗi khi gửi:', e.message);
+                console.error('❌ Lỗi khi gửi:', e);
                 toast.error('Lỗi khi gửi file');
             } finally {
                 setSubmitting(false);
@@ -58,6 +68,15 @@ function App() {
         }
 
     });
+
+    useEffect(() => {
+        //checking if private key is existing
+        if (localStorage.getItem('prv')) {
+            setPrvKey(localStorage.getItem('prv'));
+        }
+        console.log(localStorage.getItem('prv'));
+
+    }, [])
 
     return (
         <div className={'h-screen w-screen'}>
