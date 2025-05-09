@@ -14,10 +14,11 @@ function App() {
 
     const formData = useFormik({
         initialValues: {
-            ip: '',
+            ip: '', // receiver's ip
             file: null,
             publicKeyPem: '',
-            signature: '', fileContentBase64: '' // Thêm trường này
+            signature: '', //encrypted file signed with a private key
+            fileContentBase64: '' // encoded file (here using base64)
 
         },
         onSubmit: async (values, {setSubmitting}) => {
@@ -34,7 +35,7 @@ function App() {
                     publicKeyPem = KEYUTIL.getPEM(keyPair.publicKey);
                 }
 
-                // 2. Reading file and encode thành base64
+                // 2. Reading file and encode by base64
                 const fileBuffer = await values.file.arrayBuffer();
                 const binaryStr = Base64Encode(fileBuffer);
 
@@ -46,7 +47,7 @@ function App() {
                 sig.updateString(binaryStr);
                 const signature = sig.sign();
 
-                // 4. Post all to backend
+                // 4. Post all to server
                 const form = new FormData();
                 form.append('ip', values.ip);
                 form.append('file', values.file);
@@ -70,7 +71,7 @@ function App() {
     });
 
     useEffect(() => {
-        //checking if private key is existing
+        //checking if a private key is existing
         if (localStorage.getItem('prv')) {
             setPrvKey(localStorage.getItem('prv'));
         }
@@ -83,7 +84,6 @@ function App() {
             <Receiver/>
             <div className={'h-full w-full flex flex-row justify-center items-center'}>
                 <form onSubmit={formData.handleSubmit} className={'shadow-md shadow-gray-500 rounded-md'}>
-                    {/* ... (phần form giữ nguyên) */}
                     <div className={'bg-emerald-600 p-2 flex flex-row justify-center items-center'}>Form gửi file</div>
 
                     <div className={'p-2'}>
