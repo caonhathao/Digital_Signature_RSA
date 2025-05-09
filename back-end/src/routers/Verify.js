@@ -20,7 +20,7 @@ router.post('/upload', upload.single('file'), async (req, res) => {
         const file = req.file;
         const publicKeyPem = req.body.publicKeyPem;
         const signatureBase64 = req.body.signature;
-        const fileContentBase64 = req.body.fileContentBase64; // Lấy dữ liệu Base64
+        const fileContentBase64 = req.body.fileContentBase64;
 
         const logData = {
             ip: ip || req.ip,
@@ -31,6 +31,7 @@ router.post('/upload', upload.single('file'), async (req, res) => {
 
         fs.appendFileSync('./logs/upload.log', JSON.stringify(logData) + '\n');
 
+        //save public key to database if it's empty'
         let userRec = null;
         if (publicKeyPem && publicKeyPem.length > 0) {
             const saveKey = await StoreKey.update(
@@ -66,7 +67,8 @@ router.post('/upload', upload.single('file'), async (req, res) => {
             verifier.init(publicKey);
             verifier.updateString(fileContentBase64); // ✅ Update with binary file content
             isVerified = verifier.verify(signatureBase64);
-            console.log('isVerified ', isVerified);
+            console.log('Verified successfully: ', isVerified);
+            fs.appendFileSync('./logs/upload.log', 'Verified successfully: '+ isVerified + '\n\n');
             // ✅ Verify with hex signature
         } catch (e) {
             console.error('❌ Lỗi xác minh chữ ký:', e);
