@@ -46,8 +46,11 @@ wss.on('connection', (ws, req) => {
                     userIp: clientIp.toString(),
                 }
             })
-            console.log('isExisted: ',isExisted);
-            if (!isExisted) {
+            //console.log('isExisted: ', isExisted);
+            if (isExisted) {
+                console.log('Phát hiện lưu trữ người dùng!');
+            } else {
+                console.log('Người gửi không tồn tại, khởi tạo dữ liệu mới!');
                 const store = await StoreKey.create({
                     userIp: clientIp.toString(),
                 });
@@ -55,12 +58,7 @@ wss.on('connection', (ws, req) => {
                     console.log('Error when init storing key for: ', clientIp);
                 } else
                     console.log('Khởi tạo dữ liệu thành công, sẵn sàng lưu trữ khóa');
-
-            } else {
-                console.log('Người gửi không tồn tại, khởi tạo dữ liệu mới!');
             }
-
-
         }
     });
     ws.on('close', () => {
@@ -70,7 +68,7 @@ wss.on('connection', (ws, req) => {
     });
 });
 
-const uploadDir = path.join(__dirname, '../uploads');
+const uploadDir = path.join(__dirname, './uploads');
 if (!fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir, {recursive: true});
 }
