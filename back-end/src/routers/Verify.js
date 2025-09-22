@@ -60,7 +60,9 @@ router.post('/upload', upload.single('file'), async (req, res) => {
             if (userRec === null) {
                 publicKey = KEYUTIL.getKey(publicKeyPem);
             } else {
-                publicKey = KEYUTIL.getKey(userRec.key);
+               if(userRec.key.length !== 0) {
+                   publicKey = KEYUTIL.getKey(userRec.key);
+               }else publicKey = KEYUTIL.getKey(publicKeyPem);
             }
 
             const verifier = new KJUR.crypto.Signature({"alg": "SHA256withRSA"});

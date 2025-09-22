@@ -30,7 +30,7 @@ function App() {
                     const keyPair = await GenerateKeyPair();
                     const prvKeyPem = KEYUTIL.getPEM(keyPair.privateKey, "PKCS1PRV");
                     privateKey = KEYUTIL.getKey(prvKeyPem);
-                    console.log(keyPair.privateKey);
+                    //console.log(keyPair.privateKey);
                     localStorage.setItem('prv', prvKeyPem);
                     publicKeyPem = KEYUTIL.getPEM(keyPair.publicKey);
                 }
