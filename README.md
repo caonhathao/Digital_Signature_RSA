@@ -64,6 +64,8 @@
    VITE_SERVER_DOMAIN=192.x.x.x
    ```
 - Thành địa chỉ của server (ở trên).
+### d. Kết quả:
+- Sau khi thực hiện đủ các thao tác, hãy chạy lại client-server ở cả hai máy để tiến hành kết nối và gửi dữ liệu đơn giải (.txt chẳng hạn) để xem kết quả.
       
       
 
